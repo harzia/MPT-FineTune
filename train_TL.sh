@@ -13,7 +13,7 @@ fi
 
 echo "args: $@"
 
-DATADIR="${DATA_PATH}/TopTagging/raw"
+DATADIR="${DATA_PATH}/TopTagging/TopLandscape"
 OUTPUT_VOL_DIR="${OUTPUT_PATH}"
 
 # set a comment via `COMMENT`
@@ -59,9 +59,9 @@ modelopts+=" --load-model-weights ${PRETRAINED_PATH}"
 mkdir -p "${OUTPUT_VOL_DIR}/training" "${OUTPUT_VOL_DIR}/logs" "${OUTPUT_VOL_DIR}/tensorboard" "${OUTPUT_VOL_DIR}/results"
 
 weaver \
-    --data-train "${DATADIR}/train.h5" \
-    --data-val "${DATADIR}/val.h5" \
-    --data-test "${DATADIR}/test.h5" \
+    --data-train "${DATADIR}/train_file.parquet" \
+    --data-val "${DATADIR}/val_file.parquet" \
+    --data-test "${DATADIR}/test_file.parquet" \
     --data-config dataset/TopLandscape/top_kin.yaml --network-config $modelopts \
     --model-prefix ${OUTPUT_VOL_DIR}/training/TopLandscape/$FEATURE_TYPE/MPT/{auto}${suffix}/net $NETWORK_OPTIONS \
     --num-workers 1 --fetch-step 1 --in-memory \
