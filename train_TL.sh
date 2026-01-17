@@ -19,7 +19,7 @@ OUTPUT_VOL_DIR="${OUTPUT_PATH}"
 # set a comment via `COMMENT`
 suffix=${COMMENT}
 
-modelopts="networks/example_MPT.py --use-amp --optimizer-option weight_decay 0.01"
+modelopts="model/example_MPT.py --use-amp --optimizer-option weight_decay 0.01"
 lr="1e-4"
 extraopts="--optimizer-option lr_mult (\"fc.*\",50) --lr-scheduler none"
 
