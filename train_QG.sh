@@ -38,7 +38,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --num-heads) NUM_HEADS="$2"; shift 2 ;;
         --num-experts) NUM_EXPERTS="$2"; shift 2 ;;
-        --top-k) ACTIVE_EXPERTS="$2"; shift 2 ;;
+        --top-k) TOP_K="$2"; shift 2 ;;
         --capacity-factor) CAPACITY_FACTOR="$2"; shift 2 ;;
         --aux-loss-coef) AUX_LOSS_COEF="$2"; shift 2 ;;
         --router-jitter) ROUTER_JITTER="$2"; shift 2 ;;
@@ -58,6 +58,8 @@ modelopts+=" --load-model-weights ${PRETRAINED_PATH}"
 
 mkdir -p "${OUTPUT_VOL_DIR}/training" "${OUTPUT_VOL_DIR}/logs" "${OUTPUT_VOL_DIR}/tensorboard" "${OUTPUT_VOL_DIR}/results"
 
+ln -sfn "${OUTPUT_VOL_DIR}/tensorboard" runs
+
 weaver \
     --data-train "${DATADIR}/train/train_file_*.parquet" \
     --data-test "${DATADIR}/test/test_file_*.parquet" \
@@ -67,5 +69,5 @@ weaver \
     --batch-size 512 --samples-per-epoch 1600000 --samples-per-epoch-val 200000 --num-epochs 20 --gpus 0 \
     --start-lr $lr --optimizer ranger --log ${OUTPUT_VOL_DIR}/logs/QuarkGluon_${FEATURE_TYPE}_MPT_{auto}${suffix}.log \
     --predict-output ${OUTPUT_VOL_DIR}/results/QuarkGluon_${FEATURE_TYPE}_MPT${suffix}/pred.root \
-    --tensorboard ${OUTPUT_VOL_DIR}/tensorboard/QuarkGluon_${FEATURE_TYPE}_MPT${suffix} \
+    --tensorboard QuarkGluon_${FEATURE_TYPE}_MPT${suffix} \
     ${extraopts} "${WEAVER_ARGS[@]}"
