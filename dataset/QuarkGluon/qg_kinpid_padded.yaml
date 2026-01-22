@@ -12,6 +12,7 @@ new_variables:
    part_logptrel: np.log(part_pt/jet_pt)
    part_logerel: np.log(part_energy/jet_energy)
    part_deltaR: np.hypot(part_deta, part_dphi)
+   part_zeros: np.zeros_like(part_pt)
    jet_isQ: label
    jet_isG: 1-label
 
@@ -50,6 +51,10 @@ inputs:
          - [part_isPhoton, null]
          - [part_isElectron, null]
          - [part_isMuon, null]
+         - [part_zeros, null]
+         - [part_zeros, null]
+         - [part_zeros, null]
+         - [part_zeros, null]
          - [part_deta, null]
          - [part_dphi, null]
    pf_vectors:

@@ -12,7 +12,6 @@ new_variables:
    part_logptrel: np.log(part_pt/jet_pt)
    part_logerel: np.log(part_energy/jet_energy)
    part_deltaR: np.hypot(part_deta, part_dphi)
-   part_zeros: np.zeros_like(part_pt)
    jet_isTop: label
    jet_isQCD: 1-label
 
@@ -45,16 +44,6 @@ inputs:
          - [part_logptrel, -4.7, 0.7]
          - [part_logerel, -4.7, 0.7]
          - [part_deltaR, 0.2, 4.0]
-         - [part_zeros, null]
-         - [part_zeros, null]
-         - [part_zeros, null]
-         - [part_zeros, null]
-         - [part_zeros, null]
-         - [part_zeros, null]
-         - [part_zeros, null]
-         - [part_zeros, null]
-         - [part_zeros, null]
-         - [part_zeros, null]
          - [part_deta, null]
          - [part_dphi, null]
    pf_vectors:

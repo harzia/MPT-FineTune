@@ -19,12 +19,26 @@ OUTPUT_VOL_DIR="${OUTPUT_PATH}"
 # set a comment via `COMMENT`
 suffix=${COMMENT}
 
-modelopts="model/example_MPT.py --use-amp --optimizer-option weight_decay 0.01"
-lr="1e-4"
-extraopts="--optimizer-option lr_mult (\"fc.*\",50) --lr-scheduler none"
-
 # "kin", "kinpid", "kinpidplus"
 FEATURE_TYPE="kin"
+
+model=$1
+extraopts=""
+if [[ "$model" == "finetune" ]]; then
+    if [[ -z "${PRETRAINED_PATH}" ]]; then
+        echo "Error: The PRETRAINED_PATH environment variable is not set."
+        exit 1
+    fi
+    modelopts="model/MPT_Finetune.py --use-amp --optimizer-option weight_decay 0.01 --load-model-weights ${PRETRAINED_PATH}"
+    lr="1e-4"
+    extraopts="--optimizer-option lr_mult (\"fc.*\",50) --lr-scheduler none"
+    dataconfig="dataset/TopLandscape/top_kin_padded.yaml"
+else
+    modelopts="model/MPT.py --use-amp --optimizer-option weight_decay 0.01"
+    lr="1e-3"
+    dataconfig="dataset/TopLandscape/top_kin.yaml"
+fi
+shift
 
 NUM_HEADS=8
 NUM_EXPERTS=8
@@ -54,8 +68,6 @@ NETWORK_OPTIONS+=" --network-option moe_capacity_factor ${CAPACITY_FACTOR}"
 NETWORK_OPTIONS+=" --network-option moe_aux_loss_coef ${AUX_LOSS_COEF}"
 NETWORK_OPTIONS+=" --network-option moe_router_jitter ${ROUTER_JITTER}"
 
-modelopts+=" --load-model-weights ${PRETRAINED_PATH}"
-
 mkdir -p "${OUTPUT_VOL_DIR}/training" "${OUTPUT_VOL_DIR}/logs" "${OUTPUT_VOL_DIR}/tensorboard" "${OUTPUT_VOL_DIR}/results"
 
 ln -sfn "${OUTPUT_VOL_DIR}/tensorboard" runs
@@ -64,7 +76,7 @@ weaver \
     --data-train "${DATADIR}/train_file.parquet" \
     --data-val "${DATADIR}/val_file.parquet" \
     --data-test "${DATADIR}/test_file.parquet" \
-    --data-config dataset/TopLandscape/top_kin.yaml --network-config $modelopts \
+    --data-config $dataconfig --network-config $modelopts \
     --model-prefix ${OUTPUT_VOL_DIR}/training/TopLandscape/$FEATURE_TYPE/MPT/{auto}${suffix}/net $NETWORK_OPTIONS \
     --num-workers 1 --fetch-step 1 --in-memory \
     --batch-size 512 --samples-per-epoch $((2400 * 512)) --samples-per-epoch-val $((800 * 512)) --num-epochs 20 --gpus 0 \
