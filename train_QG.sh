@@ -31,7 +31,7 @@ if [[ "$model" == "finetune" ]]; then
     fi
     modelopts="model/MPT_Finetune.py --use-amp --optimizer-option weight_decay 0.01 --load-model-weights ${PRETRAINED_PATH}"
     lr="1e-4"
-    extraopts="--optimizer-option lr_mult (\"fc.*\",50) --lr-scheduler none"
+    extraopts="--optimizer-option lr_mult (\"fc.*\",50)"
     dataconfig="dataset/QuarkGluon/qg_kinpid_padded.yaml"
 else
     modelopts="model/MPT.py --use-amp --optimizer-option weight_decay 0.01"
