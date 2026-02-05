@@ -1,10 +1,10 @@
 import torch
-import torch.nn as nn
-from model.MoETransformer import MoeParticleTransformer
 from weaver.utils.logger import _logger
 
+from model.MoETransformer import MoeParticleTransformer
 
-class MoETransformerWrapper(nn.Module):
+
+class MoeParticleTransformerWrapper(torch.nn.Module):
     def __init__(self, **kwargs) -> None:
         super().__init__()
         self.mod = MoeParticleTransformer(**kwargs)
@@ -18,7 +18,7 @@ class MoETransformerWrapper(nn.Module):
 
 
 def get_model(data_config, **kwargs):
-
+    
     cfg = dict(
         input_dim=len(data_config.input_dicts['pf_features']),
         num_classes=len(data_config.label_value),
@@ -37,27 +37,49 @@ def get_model(data_config, **kwargs):
         # misc
         trim=True,
         for_inference=False,
-        # moe
-        moe_num_experts=8,
-        moe_top_k=2,
+        # MoE settings
+        moe_num_experts=4,
+        moe_top_k=1,
         moe_capacity_factor=1.5,
         moe_aux_loss_coef=0.01,
         moe_router_jitter=0.01,
     )
+    # Allow overrides via kwargs and environment variables (from ConfigMap)
     cfg.update(**kwargs)
     _logger.info('Model config: %s' % str(cfg))
 
-    model = MoETransformerWrapper(**cfg)
-
+    model = MoeParticleTransformerWrapper(**cfg)
+    
     model_info = {
         'input_names': list(data_config.input_names),
         'input_shapes': {k: ((1,) + s[1:]) for k, s in data_config.input_shapes.items()},
         'output_names': ['softmax'],
         'dynamic_axes': {**{k: {0: 'N', 2: 'n_' + k.split('_')[0]} for k in data_config.input_names}, **{'softmax': {0: 'N'}}},
     }
-
     return model, model_info
 
 
 def get_loss(data_config, **kwargs):
-    return torch.nn.CrossEntropyLoss()
+    class CombinedLoss(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.ce_loss = torch.nn.CrossEntropyLoss()
+
+        def forward(self, output, target, model=None):
+            ce_loss = self.ce_loss(output, target)
+
+            if model is None:
+                return ce_loss
+
+            # Handle DataParallel/DDP wrappers
+            if hasattr(model, 'module'):
+                model = model.module
+            
+            if hasattr(model, 'mod') and hasattr(model.mod, '_moe_aux_loss'):
+                ce_loss = ce_loss + model.mod._moe_aux_loss
+            else:
+                _logger.info("Warning: MoE Aux loss not found on model!")
+                
+            return ce_loss
+
+    return CombinedLoss()

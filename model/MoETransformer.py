@@ -474,15 +474,18 @@ class Block(nn.Module):
         # reshape to tokens-first for routing
         seq_len, batch_size, embed_dim = x.shape
         tokens = x.reshape(seq_len * batch_size, embed_dim)
+
+        # Compute router logits WITH gradients so the router can learn
+        router_logits = self.router(tokens)
+        if self.training and self.moe_router_jitter > 0:
+            noise = torch.empty_like(router_logits).uniform_(0, 1)
+            noise = -torch.log(-torch.log(noise.clamp(min=1e-9)))
+            router_logits = router_logits + self.moe_router_jitter * noise
+        gates = torch.softmax(router_logits, dim=-1)
+
+        mean_prob_per_expert = gates.mean(dim=0)
+        # Auxiliary loss computation (uses non-differentiable ops like argmax)
         with torch.no_grad():
-            router_logits = self.router(tokens)
-            if self.training and self.moe_router_jitter > 0:
-                noise = torch.empty_like(router_logits).uniform_(0, 1)
-                noise = -torch.log(-torch.log(noise.clamp(min=1e-9)))
-                router_logits = router_logits + self.moe_router_jitter * noise
-            gates = torch.softmax(router_logits, dim=-1)
-            # Load-balancing aux: generalized for top-k routing
-            mean_prob_per_expert = gates.mean(dim=0)
             if self.moe_top_k == 1:
                 token_choice = gates.argmax(dim=-1)
                 frac_per_expert = torch.stack([
@@ -494,8 +497,8 @@ class Block(nn.Module):
                 assigned.scatter_(1, topk_idx_aux, 1.0)
                 # Normalize so sum_e frac_per_expert ~= 1 like top-1 case
                 frac_per_expert = assigned.mean(dim=0) / float(self.moe_top_k)
-            aux = (mean_prob_per_expert * frac_per_expert).sum() * (self.moe_num_experts ** 2)
-            self._last_aux_loss = aux.detach()
+        aux = (mean_prob_per_expert * frac_per_expert).sum() * self.moe_num_experts
+        self._last_aux_loss = aux
 
         output_tokens = torch.zeros_like(tokens)
         if self.moe_top_k == 1:
