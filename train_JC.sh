@@ -41,10 +41,15 @@ else
     CMD="weaver"
 fi
 
+NUM_WORKERS=2
+if ((TRAIN_PERCENTAGE == 1)); then
+    NUM_WORKERS=1
+fi
+
 epochs=50
 samples_per_epoch=$(((TRAIN_PERCENTAGE * 1000 * 1024) / (10 * NGPUS) ))
 samples_per_epoch_val=$((10000 * 128))
-dataopts="--num-workers 2 --fetch-step 0.01"
+dataopts="--num-workers $NUM_WORKERS --fetch-step 0.01"
 modelopts="model/MPT.py --use-amp"
 batchopts="--batch-size 512 --start-lr 1e-3"
 
