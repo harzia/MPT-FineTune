@@ -13,7 +13,6 @@ fi
 DATADIR="${DATA_PATH}/JetClass/Pythia"
 OUTPUT_VOL_DIR="${OUTPUT_PATH}"
 
-source env.sh
 echo "args: $@"
 
 TRAIN_PERCENTAGE=100
