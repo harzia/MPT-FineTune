@@ -46,7 +46,7 @@ if ((TRAIN_PERCENTAGE == 1)); then
     NUM_WORKERS=1
 fi
 
-epochs=50
+epochs=100
 samples_per_epoch=$(((TRAIN_PERCENTAGE * 1000 * 1024) / (10 * NGPUS) ))
 samples_per_epoch_val=$((10000 * 128))
 dataopts="--num-workers $NUM_WORKERS --fetch-step 0.01"
