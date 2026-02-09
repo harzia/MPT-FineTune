@@ -53,6 +53,7 @@ dataopts="--num-workers $NUM_WORKERS --fetch-step 0.01"
 modelopts="model/MPT.py --use-amp"
 batchopts="--batch-size 512 --start-lr 1e-3"
 model_location="${MODEL_LOC}"
+epoch_to_load="${LOAD_EPOCH}"
 
 if ! [[ "${FEATURE_TYPE}" =~ ^(full|kin|kinpid)$ ]]; then
     echo "Invalid feature type ${FEATURE_TYPE}!"
@@ -100,7 +101,7 @@ $CMD \
     "ZJetsToNuNu:${DATADIR}/test_20M/ZJetsToNuNu_*.root" \
     --data-config dataset/JetClass/JetClass_${FEATURE_TYPE}.yaml --network-config $modelopts \
     --model-prefix $model_location \
-    $dataopts $batchopts --load-epoch 49 \
+    $dataopts $batchopts --load-epoch $epoch_to_load \
     --samples-per-epoch ${samples_per_epoch} --samples-per-epoch-val ${samples_per_epoch_val} --num-epochs $epochs --gpus 0 \
     --optimizer ranger --log ${OUTPUT_VOL_DIR}/logs/JetClass_Pythia_${FEATURE_TYPE}_MPT_{auto}${suffix}.log \
     --predict-output ${OUTPUT_VOL_DIR}/results/JetClass_Pythia_${FEATURE_TYPE}_MPT${suffix}/pred.root \
