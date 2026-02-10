@@ -102,7 +102,7 @@ def main():
     }
     
     print(f"Active Params: {results['compute']['params']['active_params']}")
-    print(f"GMACS: {results['compute']['flops']['total_flops']}")
+    print(f"MACS: {results['compute']['flops']['total_flops']}")
     print(f"Latency: {results['compute']['latency']['latency_ms']:.2f} ms")
 
     print("\n" + "="*40)
