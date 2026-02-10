@@ -7,7 +7,7 @@ import numpy as np
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from ..model.MPT import MoeParticleTransformerWrapper 
+from model.MoETransformer import MoeParticleTransformer 
 
 from evaluation.data_loader import get_train_loader, get_test_loader
 from evaluation.embedding_eval import EmbeddingEvaluator
@@ -26,7 +26,7 @@ def prepare_inputs(batch_data, device):
 def load_wrapped_model(checkpoint_path, model_config, device):
     print(f"Loading wrapped model from {checkpoint_path}")
     
-    model = MoeParticleTransformerWrapper(**model_config)
+    model = MoeParticleTransformer(**model_config)
     
     state_dict = torch.load(checkpoint_path, map_location=device)
     
@@ -55,7 +55,7 @@ def main():
     os.makedirs(args.save_dir, exist_ok=True)
     results = {}
 
-    input_dim = 17 if args.dataset == 'jetclass' else 10 #add whatever feature numbers for qg and top tag
+    input_dim = 17
     num_classes = 10 if args.dataset == 'jetclass' else 2
     
     model_config = dict(
@@ -82,7 +82,7 @@ def main():
     )
 
     model = load_wrapped_model(args.checkpoint, model_config, device)
-    train_loader = get_train_loader(args.data_dir, args.dataset, batch_size=args.batch_size) # dont need full dataset, maybe add some max_samples argument
+    train_loader = get_train_loader(args.data_dir, args.dataset, batch_size=args.batch_size)
     test_loader = get_test_loader(args.data_dir, args.dataset, batch_size=args.batch_size)
 
     print("\n" + "="*40)
@@ -91,8 +91,9 @@ def main():
     
     batch = next(iter(test_loader))
     inputs_tuple = prepare_inputs(batch[0], device)
+    first_jet_tuple = tuple(t[0:1] for t in inputs_tuple)
     
-    profiler = ModelProfiler(model, inputs_tuple)
+    profiler = ModelProfiler(model, first_jet_tuple)
     
     results['compute'] = {
         'params': profiler.count_params(),
@@ -100,8 +101,8 @@ def main():
         'latency': profiler.measure_latency()
     }
     
-    print(f"Active Params: {results['compute']['params']['active_params']/1e6:.2f}M")
-    print(f"GMACS: {results['compute']['flops']['total_flops']/1e9:.4f}")
+    print(f"Active Params: {results['compute']['params']['active_params']}")
+    print(f"GMACS: {results['compute']['flops']['total_flops']}")
     print(f"Latency: {results['compute']['latency']['latency_ms']:.2f} ms")
 
     print("\n" + "="*40)
