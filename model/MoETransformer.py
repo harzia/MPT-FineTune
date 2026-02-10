@@ -568,6 +568,7 @@ class MoeParticleTransformer(nn.Module):
                  num_heads=8,
                  num_layers=8,
                  num_cls_layers=2,
+                 ffn_ratio=4,
                  block_params=None,
                  cls_block_params={'dropout': 0, 'attn_dropout': 0, 'activation_dropout': 0},
                  fc_params=[],
@@ -591,7 +592,7 @@ class MoeParticleTransformer(nn.Module):
         self.use_amp = use_amp
 
         embed_dim = embed_dims[-1] if len(embed_dims) > 0 else input_dim
-        default_cfg = dict(embed_dim=embed_dim, num_heads=num_heads, ffn_ratio=4,
+        default_cfg = dict(embed_dim=embed_dim, num_heads=num_heads, ffn_ratio=ffn_ratio,
                            dropout=0.1, attn_dropout=0.1, activation_dropout=0.1,
                            add_bias_kv=False, activation=activation,
                            scale_fc=True, scale_attn=True, scale_heads=True, scale_resids=True)
