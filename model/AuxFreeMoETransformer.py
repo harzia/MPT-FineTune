@@ -512,7 +512,6 @@ class Block(nn.Module):
             _, topk_idx = biased_gates.topk(k=k, dim=-1)
             topk_vals = gates.gather(1, topk_idx) 
             
-            # Renormalize original sigmoid scores for the selected experts
             denom = topk_vals.sum(dim=1, keepdim=True).clamp(min=1e-9)
             topk_w = topk_vals / denom
             

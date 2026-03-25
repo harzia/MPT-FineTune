@@ -41,8 +41,8 @@ def get_model(data_config, **kwargs):
         # MoE settings
         moe_num_experts=8,
         moe_top_k=2,
+        moe_capacity_factor=4,
         moe_bias_update_rate=0.001,
-        moe_aux_loss_coef=0.01,
         moe_router_jitter=0.01,
     )
     # Allow overrides via kwargs and environment variables (from ConfigMap)
