@@ -426,9 +426,6 @@ class Block(nn.Module):
         self.w_resid = nn.Parameter(torch.ones(embed_dim), requires_grad=True) if scale_resids else None
 
     def forward(self, x, x_cls=None, padding_mask=None, attn_mask=None):
-        # ----------------------------------------
-        # ATTENTION BLOCK (Unchanged)
-        # ----------------------------------------
         if x_cls is not None:
             with torch.no_grad():
                 padding_mask = torch.cat((torch.zeros_like(padding_mask[:, :1]), padding_mask), dim=1)

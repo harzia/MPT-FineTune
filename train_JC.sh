@@ -15,14 +15,21 @@ OUTPUT_VOL_DIR="${OUTPUT_PATH}"
 
 echo "args: $@"
 
-TRAIN_PERCENTAGE=100
+MODEL_NAME=$1
+if ! [[ "${MODEL_NAME}" =~ ^(MPT|AuxFreeMPT)$ ]]; then
+    echo "Invalid model ${MODEL_NAME}! Valid options: MPT, AuxFreeMPT"
+    exit 1
+fi
+shift
 
 if [[ -z "$1" ]] || [[ "$1" == --* ]]; then
-    echo "Error: The first argument must be the feature type (e.g., full, kin, kinpid)."
+    echo "Error: The second argument must be the feature type (e.g., full, kin, kinpid)."
     exit 1
 fi
 FEATURE_TYPE=$1
 shift
+
+TRAIN_PERCENTAGE=100
 
 WEAVER_ARGS=()
 while [[ $# -gt 0 ]]; do
@@ -50,7 +57,8 @@ epochs=100
 samples_per_epoch=$(((TRAIN_PERCENTAGE * 1000 * 1024) / (10 * NGPUS) ))
 samples_per_epoch_val=$((10000 * 128))
 dataopts="--num-workers $NUM_WORKERS --fetch-step 0.01"
-modelopts="model/MPT.py --use-amp"
+
+modelopts="model/${MODEL_NAME}.py --use-amp"
 batchopts="--batch-size 512 --start-lr 1e-3"
 
 if ! [[ "${FEATURE_TYPE}" =~ ^(full|kin|kinpid)$ ]]; then
@@ -98,10 +106,10 @@ $CMD \
     "ZToQQ:${DATADIR}/test_20M/ZToQQ_*.root" \
     "ZJetsToNuNu:${DATADIR}/test_20M/ZJetsToNuNu_*.root" \
     --data-config dataset/JetClass/JetClass_${FEATURE_TYPE}.yaml --network-config $modelopts \
-    --model-prefix ${OUTPUT_VOL_DIR}/training/JetClass/Pythia/${FEATURE_TYPE}/MPT/{auto}${suffix}/net \
+    --model-prefix ${OUTPUT_VOL_DIR}/training/JetClass/Pythia/${FEATURE_TYPE}/${MODEL_NAME}/{auto}${suffix}/net \
     $dataopts $batchopts \
     --samples-per-epoch ${samples_per_epoch} --samples-per-epoch-val ${samples_per_epoch_val} --num-epochs $epochs --gpus 0 \
-    --optimizer ranger --log ${OUTPUT_VOL_DIR}/logs/JetClass_Pythia_${FEATURE_TYPE}_MPT_{auto}${suffix}.log \
-    --predict-output ${OUTPUT_VOL_DIR}/results/JetClass_Pythia_${FEATURE_TYPE}_MPT${suffix}/pred.root \
-    --tensorboard JetClass_Pythia_${FEATURE_TYPE}_MPT${suffix} \
+    --optimizer ranger --log ${OUTPUT_VOL_DIR}/logs/JetClass_Pythia_${FEATURE_TYPE}_${MODEL_NAME}_{auto}${suffix}.log \
+    --predict-output ${OUTPUT_VOL_DIR}/results/JetClass_Pythia_${FEATURE_TYPE}_${MODEL_NAME}${suffix}/pred.root \
+    --tensorboard JetClass_Pythia_${FEATURE_TYPE}_${MODEL_NAME}${suffix} \
     "${WEAVER_ARGS[@]}"
