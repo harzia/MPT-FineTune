@@ -498,6 +498,7 @@ class Block(nn.Module):
                     expert_out = self.experts[e](expert_in)
                     expert_w = top1_w.index_select(0, idx).unsqueeze(1)
                     expert_out = expert_out * expert_w
+                    expert_out = expert_out.to(output_tokens.dtype)
                     output_tokens.index_copy_(0, idx, expert_out)
             
             if self.training:
@@ -543,6 +544,7 @@ class Block(nn.Module):
                     expert_in = tokens.index_select(0, rows)
                     expert_out = self.experts[e](expert_in)
                     expert_out = expert_out * weights_e.unsqueeze(1)
+                    expert_out = expert_out.to(output_tokens.dtype)
                     output_tokens.index_add_(0, rows, expert_out)
 
             if self.training:
