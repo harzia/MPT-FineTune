@@ -462,7 +462,7 @@ class Block(nn.Module):
         seq_len, batch_size, embed_dim = x.shape
         tokens = x.reshape(seq_len * batch_size, embed_dim)
 
-        if padding_mask is not None:
+        if padding_mask is not None and x_cls is None:
             flat_padding_mask = padding_mask.transpose(0, 1).reshape(-1)
             valid_mask = ~flat_padding_mask
         else:
