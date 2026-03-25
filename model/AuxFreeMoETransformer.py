@@ -462,6 +462,13 @@ class Block(nn.Module):
         seq_len, batch_size, embed_dim = x.shape
         tokens = x.reshape(seq_len * batch_size, embed_dim)
 
+        if padding_mask is not None:
+            flat_padding_mask = padding_mask.transpose(0, 1).reshape(-1)
+            valid_mask = ~flat_padding_mask
+        else:
+            valid_mask = torch.ones(tokens.size(0), dtype=torch.bool, device=tokens.device)
+
+
         router_logits = self.router(tokens)
         if self.training and self.moe_router_jitter > 0:
             noise = torch.empty_like(router_logits).uniform_(0, 1)
@@ -477,10 +484,11 @@ class Block(nn.Module):
             top1_idx = biased_gates.argmax(dim=-1)
             top1_w = gates.gather(1, top1_idx.unsqueeze(1)).squeeze(1)
             
-            capacity = int(self.moe_capacity_factor * math.ceil(tokens.size(0) / max(1, self.moe_num_experts)))
+            num_real_tokens = valid_mask.sum().item() if self.training else tokens.size(0)
+            capacity = int(self.moe_capacity_factor * math.ceil(num_real_tokens / max(1, self.moe_num_experts)))
             
             for e in range(self.moe_num_experts):
-                mask = (top1_idx == e)
+                mask = (top1_idx == e) & valid_mask
                 if mask.any():
                     idx = torch.nonzero(mask, as_tuple=False).squeeze(1)
                     if idx.numel() > capacity:
@@ -494,7 +502,8 @@ class Block(nn.Module):
             
             if self.training:
                 with torch.no_grad():
-                    token_counts = torch.bincount(top1_idx, minlength=self.moe_num_experts).float()
+                    valid_top1_idx = top1_idx[valid_mask]
+                    token_counts = torch.bincount(valid_top1_idx, minlength=self.moe_num_experts).float()
                     
                     # Sync counts across GPUs
                     if dist.is_available() and dist.is_initialized():
@@ -515,10 +524,11 @@ class Block(nn.Module):
             denom = topk_vals.sum(dim=1, keepdim=True).clamp(min=1e-9)
             topk_w = topk_vals / denom
             
-            capacity = int(self.moe_capacity_factor * math.ceil((tokens.size(0) * k) / max(1, self.moe_num_experts)))
+            num_real_tokens = valid_mask.sum().item() if self.training else tokens.size(0)
+            capacity = int(self.moe_capacity_factor * math.ceil((num_real_tokens * k) / max(1, self.moe_num_experts)))
             
             for e in range(self.moe_num_experts):
-                mask_e = (topk_idx == e)
+                mask_e = (topk_idx == e) & valid_mask.unsqueeze(1)
                 if mask_e.any():
                     rows, cols = torch.nonzero(mask_e, as_tuple=True)
                     if rows.numel() > capacity:
@@ -537,8 +547,9 @@ class Block(nn.Module):
 
             if self.training:
                 with torch.no_grad():
+                    valid_topk_idx = topk_idx[valid_mask]
                     assigned_counts = torch.zeros(self.moe_num_experts, device=tokens.device)
-                    assigned_counts.scatter_add_(0, topk_idx.flatten(), torch.ones_like(topk_idx.flatten(), dtype=torch.float))
+                    assigned_counts.scatter_add_(0, valid_topk_idx.flatten(), torch.ones_like(valid_topk_idx.flatten(), dtype=torch.float))
                     
                     # Sync counts across GPUs
                     if dist.is_available() and dist.is_initialized():
