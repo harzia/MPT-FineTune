@@ -510,9 +510,12 @@ class PairwiseMoEParticleTransformer(nn.Module):
         self.cls_blocks = nn.ModuleList([Block(**cfg_cls_block) for _ in range(num_cls_layers)])
         self.norm = nn.LayerNorm(embed_dim)
 
-        self.layer_pair_mixers = nn.ModuleList([
-            nn.Linear(num_heads, num_heads) for _ in range(num_layers)
-        ])
+
+        mu_init = [-3.0, -2.5, -1.8, -1.2, -0.6, 0.0, 0.5, 1.0]
+        self.layer_mu = nn.Parameter(torch.tensor(mu_init))
+        
+        self.layer_sigma = nn.Parameter(torch.ones(num_layers) * 0.5)
+        
         self.gamma = nn.Parameter(torch.ones(num_layers) * 0.01)
 
         if fc_params is not None:
@@ -568,50 +571,37 @@ class PairwiseMoEParticleTransformer(nn.Module):
         
         self._current_sparsities = {}
 
-        threshold_schedule = [
-            (0.0, 0.1),  # Layer 0: Immediate collinear splittings
-            (0.05, 0.2), # Layer 1: Expanding micro-physics
-            (0.1, 0.4),  # Layer 2: Sub-subjet structures
-            (0.2, 0.6),  # Layer 3: Subjet clustering
-            (0.4, 0.8),  # Layer 4: Inter-subjet routing (radius scale)
-            (0.6, 1.2),  # Layer 5: Global topology (cross-jet)
-            (0.8, 1.6),  # Layer 6: Extreme global / opposite edges
-            (0.8, 99.0)  # Layer 7: Safety catch-all for boundary pairs
-        ]
-
         for i, block in enumerate(self.blocks):
             layer_attn_mask_flat = None
 
             if base_attn_mask is not None and v is not None:
-                if i < len(threshold_schedule):
-                    min_thresh, max_thresh = threshold_schedule[i]
-                else:
-                    min_thresh, max_thresh = (0.0, 99.0)
-                
-                ln_min = math.log(min_thresh) if min_thresh > 0 else -math.inf
-                ln_max = math.log(max_thresh)
-                
-                valid_mask = (ln_delta_r > ln_min) & (ln_delta_r < ln_max)
-
+                mu = self.layer_mu[i]
+                sigma = self.layer_sigma[i].clamp(min=1e-3)
+                    
+                gaussian_weight = torch.exp(-0.5 * ((ln_delta_r - mu) / sigma) ** 2)
+                    
+                valid_mask = gaussian_weight > 0.05
                 active_real_pairs = valid_mask & real_2d_mask   
 
                 with torch.no_grad():
                     fraction_active = (active_real_pairs.sum().float() / total_real_pairs).item()
                     self._current_sparsities[f'layer_{i}_active_fraction'] = fraction_active
+                    self._current_sparsities[f'layer_{i}_mu'] = mu.item()
+                    self._current_sparsities[f'layer_{i}_sigma'] = sigma.item()
 
                 base_attn_permuted = base_attn_mask.permute(0, 2, 3, 1)
-
                 active_features = base_attn_permuted[active_real_pairs]
-                transformed_features = self.layer_pair_mixers[i](active_features)
+                    
+                active_weights = gaussian_weight[active_real_pairs].unsqueeze(-1)
+                    
+                weighted_features = active_features * active_weights * self.gamma[i]
 
                 u_active_band = torch.zeros_like(base_attn_permuted)
-                u_active_band[active_real_pairs] = transformed_features
-
+                u_active_band[active_real_pairs] = weighted_features
                 u_active_band = u_active_band.permute(0, 3, 1, 2)
 
-                layer_attn_mask = base_attn_mask + (self.gamma[i] * u_active_band)
-
-                layer_attn_mask_flat = layer_attn_mask.view(-1, seq_len, seq_len)
+                layer_attn_mask = base_attn_mask + u_active_band
+                layer_attn_mask_flat = layer_attn_mask.view(-1, seq_len, seq_len)         
             elif base_attn_mask is not None:
                 layer_attn_mask_flat = base_attn_mask.view(-1, seq_len, seq_len)
 
