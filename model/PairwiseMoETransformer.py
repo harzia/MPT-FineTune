@@ -513,10 +513,22 @@ class PairwiseMoEParticleTransformer(nn.Module):
 
         mu_init = [-3.0, -2.5, -1.8, -1.2, -0.6, 0.0, 0.5, 1.0]
         self.layer_mu = nn.Parameter(torch.tensor(mu_init))
-        
         self.layer_sigma = nn.Parameter(torch.ones(num_layers) * 0.5)
-        
         self.gamma = nn.Parameter(torch.ones(num_layers) * 0.01)
+
+        self.num_experts = 4
+        self.layer_routers = nn.ModuleList([
+            nn.Linear(4, self.num_experts) for _ in range(num_layers)
+        ])
+        self.layer_experts = nn.ModuleList([
+            nn.ModuleList([
+                nn.Sequential(
+                    nn.Linear(num_heads, num_heads * 2),
+                    nn.GELU(),
+                    nn.Linear(num_heads * 2, num_heads)
+                ) for _ in range(self.num_experts)
+            ]) for _ in range(num_layers)
+        ])
 
         if fc_params is not None:
             fcs = []
@@ -579,29 +591,40 @@ class PairwiseMoEParticleTransformer(nn.Module):
                 sigma = self.layer_sigma[i].clamp(min=1e-3)
                     
                 gaussian_weight = torch.exp(-0.5 * ((ln_delta_r - mu) / sigma) ** 2)
-                    
                 valid_mask = gaussian_weight > 0.05
                 active_real_pairs = valid_mask & real_2d_mask   
+
+                raw_physics_permuted = raw_physics.permute(0, 2, 3, 1)
+                active_kinematics = raw_physics_permuted[active_real_pairs]
+
+                base_attn_permuted = base_attn_mask.permute(0, 2, 3, 1)
+                active_features = base_attn_permuted[active_real_pairs]
+                active_weights = gaussian_weight[active_real_pairs].unsqueeze(-1)
+
+                routing_logits = self.layer_routers[i](active_kinematics)
+                routing_probs = torch.sigmoid(routing_logits)
 
                 with torch.no_grad():
                     fraction_active = (active_real_pairs.sum().float() / total_real_pairs).item()
                     self._current_sparsities[f'layer_{i}_active_fraction'] = fraction_active
                     self._current_sparsities[f'layer_{i}_mu'] = mu.item()
                     self._current_sparsities[f'layer_{i}_sigma'] = sigma.item()
+                    for e in range(self.num_experts):
+                        self._current_sparsities[f'layer_{i}_expert_{e}_prob'] = routing_probs[:, e].mean().item()
 
-                base_attn_permuted = base_attn_mask.permute(0, 2, 3, 1)
-                active_features = base_attn_permuted[active_real_pairs]
+                mixed_features = torch.zeros_like(active_features)
+                for e in range(self.num_experts):
+                    expert_out = self.layer_experts[i][e](active_features)
+                    mixed_features += expert_out * routing_probs[:, e:e+1]
                     
-                active_weights = gaussian_weight[active_real_pairs].unsqueeze(-1)
-                    
-                weighted_features = active_features * active_weights * self.gamma[i]
+                weighted_features = mixed_features * active_weights * self.gamma[i]
 
                 u_active_band = torch.zeros_like(base_attn_permuted)
                 u_active_band[active_real_pairs] = weighted_features
                 u_active_band = u_active_band.permute(0, 3, 1, 2)
 
                 layer_attn_mask = base_attn_mask + u_active_band
-                layer_attn_mask_flat = layer_attn_mask.view(-1, seq_len, seq_len)         
+                layer_attn_mask_flat = layer_attn_mask.view(-1, seq_len, seq_len)       
             elif base_attn_mask is not None:
                 layer_attn_mask_flat = base_attn_mask.view(-1, seq_len, seq_len)
 
